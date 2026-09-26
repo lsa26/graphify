@@ -1,8 +1,11 @@
 name: Release graph asset
 
+# Manual-launch only: no release-event auto-trigger, to avoid burning
+# free-tier GitHub Actions minutes. CloudBees Unify's security scan is
+# unaffected — it's triggered by its own SCM webhook on push, independent
+# of GitHub Actions. Run this manually after cutting a release
+# (gh workflow run release-graph.yml) if you want the graph asset attached.
 on:
-  release:
-    types: [published]
   workflow_dispatch:
 
 permissions:
