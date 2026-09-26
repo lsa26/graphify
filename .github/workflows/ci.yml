@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "main"]
+  pull_request:
+    branches: ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  skillgen-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Check generated skill artifacts are up to date
+        run: uv run --frozen python -m tools.skillgen --check
+
+      - name: Audit per-host v8 coverage
+        run: uv run --frozen python -m tools.skillgen --audit-coverage
+
+      - name: Check the file_type enum is a singleton
+        run: uv run --frozen python -m tools.skillgen --schema-singleton
+
+      - name: Round-trip the monoliths against v8
+        run: uv run --frozen python -m tools.skillgen --monolith-roundtrip
+
+      - name: Round-trip the always-on blocks against v8
+        run: uv run --frozen python -m tools.skillgen --always-on-roundtrip
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras --frozen
+
+      - name: Run tests
+        run: uv run --frozen pytest tests/ -q --tb=short
+
+      - name: Verify install works end-to-end
+        run: |
+          uv run --frozen graphify --help
+          uv run --frozen graphify install
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: bandit (static security analysis)
+        run: uv run --frozen bandit -r graphify -ll
+
+      - name: pip-audit (dependency vulnerabilities)
+        run: uv run --frozen pip-audit --strict
